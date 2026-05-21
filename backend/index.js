@@ -14,6 +14,7 @@ const fileUpload = require("express-fileupload");
 const cors = require("cors");
 
 const database = require("./config/database");
+const keepAlive = require("./keepAlive");
 
 const PORT = process.env.PORT || 5000;
 
@@ -56,6 +57,15 @@ app.get("/", (req, res) => {
 	});
 });
 
+// Keep-alive / uptime monitor target
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+    });
+});
+
 // mongoDB Health
 app.get("/api/v1/health", (req, res) => {
   res.json({
@@ -75,4 +85,5 @@ app.get("/api/v1/test", (_, res) => {
 // Listening to the server
 app.listen(PORT, () => {
 	console.log(`App is listening at ${PORT}`);
+	keepAlive();
 });
