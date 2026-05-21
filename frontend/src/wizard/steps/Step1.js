@@ -7,6 +7,7 @@ export default function Step1({ initial = {}, onNext, onUpdate = () => {} }) {
   const [form, setForm] = useState({
     enquiry_no: "",
     supplier_name: "",
+    CustomerName: "",
     ff: "",
     customer: "",
     invoice_no: "",
@@ -120,6 +121,12 @@ useEffect(() => {
           <label>Supplier Name</label>
           <input className="input" name="supplier_name" value={form.supplier_name} onChange={change} />
         </div>
+         <div className="field">
+    <label>Customer Name</label>
+    <input
+      className="input"name="customer"value={form.customer}onChange={change}placeholder="Enter Customer Name"
+    />
+  </div>
       </div>
 
       <div className="form-grid">
