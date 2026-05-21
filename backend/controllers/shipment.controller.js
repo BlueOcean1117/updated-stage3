@@ -311,7 +311,7 @@ exports.getEnquiryNumber = async (req, res) => {
       .findOne({ enquiry_no: new RegExp(`^${prefix}`) })
       .sort({ enquiry_no: -1 });
 
-    let seq = 50001;
+    let seq = 5001;
 
     if (lastRecord && lastRecord.enquiry_no) {
       const lastSeqStr = lastRecord.enquiry_no.replace(prefix, "");
