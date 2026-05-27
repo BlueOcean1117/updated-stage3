@@ -14,7 +14,9 @@ const PartItemSchema = new mongoose.Schema({
   quantity: { type: Number, default: 0 },
   net_wt_per_unit: { type: Number, default: 0 }, // Net Wt / Unit (Kg)
   packing_wt: { type: Number, default: 0 },     // Packing Wt (Kg)
-  gross_wt: { type: Number, default: 0 }         // Gross Wt (Kg)
+  gross_wt: { type: Number, default: 0 } ,
+  no_of_boxes: { type: Number, default: 0 }, 
+         
 });
 
 /**
@@ -36,7 +38,7 @@ const ShipmentSchema = new mongoose.Schema(
     // Calculated fields for Whole Shipment Totals
    // Add these to your Main ShipmentSchema definition to catch all variants safely
 total_net_weight: { type: Number, default: 0 },
-total_packing_weight: { type: Number, default: 0 },
+total_no_of_boxes: { type: Number, default: 0 },
 total_gross_weight: { type: Number, default: 0 },
 total_parts_count: { type: Number, default: 0 },
 
@@ -44,7 +46,7 @@ total_parts_count: { type: Number, default: 0 },
 total_qty: { type: Number },
 total_net_wt: { type: Number },
 total_gross_wt: { type: Number },
-total_pkg_wt: { type: Number },
+total_no_of_boxes: { type: Number },
     // Dropdown value constraints (Enums)
     incoterm: { 
       type: String, 
@@ -98,12 +100,12 @@ ShipmentSchema.pre("save", function (next) {
   if (this.total_qty !== undefined && this.total_qty !== null) this.total_parts_count = Number(this.total_qty);
   if (this.total_net_wt !== undefined && this.total_net_wt !== null) this.total_net_weight = Number(this.total_net_wt);
   if (this.total_gross_wt !== undefined && this.total_gross_wt !== null) this.total_gross_weight = Number(this.total_gross_wt);
-  if (this.total_pkg_wt !== undefined && this.total_pkg_wt !== null) this.total_packing_weight = Number(this.total_pkg_wt);
+  if (this.total_no_of_boxes !== undefined && this.total_no_of_boxes !== null) this.total_no_of_boxes = Number(this.total_no_of_boxes);
 
   if (this.parts && this.parts.length > 0) {
     // If complex parts items exist, sum them up
     this.total_parts_count = this.parts.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    this.total_packing_weight = this.parts.reduce((sum, item) => sum + (Number(item.packing_wt) || 0), 0);
+    this.total_no_of_boxes = this.parts.reduce((sum, item) => sum + (Number(item.no_of_boxes) || 0), 0);
     this.total_gross_weight = this.parts.reduce((sum, item) => sum + (Number(item.gross_wt) || 0), 0);
     this.total_net_weight = this.parts.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.net_wt_per_unit) || 0)), 0);
   }
