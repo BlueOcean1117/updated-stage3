@@ -7,7 +7,6 @@ export default function Step1({ initial = {}, onNext, onUpdate = () => {} }) {
   const [form, setForm] = useState({
     enquiry_no: "",
     supplier_name: "",
-    CustomerName: "",
     ff: "",
     customer: "",
     invoice_no: "",
@@ -19,114 +18,156 @@ export default function Step1({ initial = {}, onNext, onUpdate = () => {} }) {
     sb_date: "",
     // Dynamic Parts Array
     parts: initial.parts || [
-      { 
-        part_no: "", 
-        part_desc: "", 
-        part_qty: 0, 
-        part_net_unit: 0, 
-        part_gross: 0, 
-        part_pkg_wt: 0, 
-        part_box_size: "" 
-      }
+      {
+        part_no: "",
+        part_desc: "",
+        part_qty: 0,
+        part_net_unit: 0,
+        part_gross: 0,
+        part_total_net_wt: 0,
+        part_box_size: "",
+        part_no_of_boxes: 0,    // ← new field
+      },
     ],
     // Calculated Totals
     total_net_wt: 0,
     total_gross_wt: 0,
-    total_pkg_wt: 0,
+    total_no_of_boxes: 0,       // ← replaces total_pkg_wt & total parts count
     ...initial,
   });
-// Add this inside your Step1 component, before the existing useEffect
-useEffect(() => {
-  // Only fetch if enquiry_no is empty (means we are in Create mode, not Edit mode)
-  if (!form.enquiry_no) {
-    const fetchNextNumber = async () => {
-      try {
-        const response = await API.get("/shipment/enquiry-number");
-        if (response.data && response.data.enquiryNo) {
-          setForm(prev => ({ ...prev, enquiry_no: response.data.enquiryNo }));
+
+  /* ─── Auto-fetch enquiry number on Create mode ─── */
+  useEffect(() => {
+    if (!form.enquiry_no) {
+      const fetchNextNumber = async () => {
+        try {
+          const response = await API.get("/shipment/enquiry-number");
+          if (response.data?.enquiryNo) {
+            setForm((prev) => ({ ...prev, enquiry_no: response.data.enquiryNo }));
+          }
+        } catch (err) {
+          console.error("Failed to fetch enquiry number:", err);
         }
-      } catch (err) {
-        console.error("Failed to fetch enquiry number:", err);
-      }
-    };
-    fetchNextNumber();
-  }
-}, []); // Empty dependency array means this runs once on mount
-  /* ============================
-      TOTALS CALCULATION LOGIC
-  ============================ */
+      };
+      fetchNextNumber();
+    }
+  }, []);
+
+  /* ─── Totals Calculation ─── */
   useEffect(() => {
     let aggregateNet = 0;
     let aggregateGross = 0;
-    let aggregatePkg = 0;
+    let aggregateBoxes = 0;
     let aggregateQty = 0;
 
     form.parts.forEach((p) => {
-      aggregateNet += (Number(p.part_qty || 0) * Number(p.part_net_unit || 0));
+      aggregateNet   += Number(p.part_qty || 0) * Number(p.part_net_unit || 0);
       aggregateGross += Number(p.part_gross || 0);
-      aggregatePkg += Number(p.part_pkg_wt || 0);
-      aggregateQty += Number(p.part_qty || 0);
+      aggregateBoxes += Number(p.part_no_of_boxes || 0);  // ← sum each part's No. of Boxes
+      aggregateQty   += Number(p.part_qty || 0);
     });
 
     const updatedForm = {
       ...form,
-      total_qty: aggregateQty,            // ← total parts count for backend
+      total_qty: aggregateQty,
       total_net_wt: aggregateNet.toFixed(2),
       total_gross_wt: aggregateGross.toFixed(2),
-      total_pkg_wt: aggregatePkg.toFixed(2),
+      total_no_of_boxes: aggregateBoxes,            // ← replaces total_pkg_wt
     };
 
     setForm(updatedForm);
     onUpdate(updatedForm);
   }, [form.parts]);
 
-  /* ======================
-      HANDLERS
-  ====================== */
+  /* ─── Part field change handler ─── */
   const handlePartChange = (index, e) => {
     const { name, value } = e.target;
     const updatedParts = [...form.parts];
-    updatedParts[index][name] = value;
+    updatedParts[index] = { ...updatedParts[index], [name]: value };
+
+    // Auto-calculate Total Net Wt = Qty × Net Wt/Unit
+    // Only recalc if the user didn't directly edit part_total_net_wt
+    if (name === "part_qty" || name === "part_net_unit") {
+      const qty     = name === "part_qty"      ? Number(value) : Number(updatedParts[index].part_qty     || 0);
+      const netUnit = name === "part_net_unit" ? Number(value) : Number(updatedParts[index].part_net_unit || 0);
+      updatedParts[index].part_total_net_wt = (qty * netUnit).toFixed(2);
+    }
+
     setForm((prev) => ({ ...prev, parts: updatedParts }));
   };
 
   const addPart = () => {
-    setForm(prev => ({
+    setForm((prev) => ({
       ...prev,
-      parts: [...prev.parts, { part_no: "", part_desc: "", part_qty: 0, part_net_unit: 0, part_gross: 0, part_pkg_wt: 0, part_box_size: "" }]
+      parts: [
+        ...prev.parts,
+        {
+          part_no: "",
+          part_desc: "",
+          part_qty: 0,
+          part_net_unit: 0,
+          part_gross: 0,
+          part_total_net_wt: 0,
+          part_box_size: "",
+          part_no_of_boxes: 0,   // ← new field
+        },
+      ],
     }));
   };
 
   const removePart = (index) => {
-    const updatedParts = form.parts.filter((_, i) => i !== index);
-    setForm(prev => ({ ...prev, parts: updatedParts }));
+    setForm((prev) => ({
+      ...prev,
+      parts: prev.parts.filter((_, i) => i !== index),
+    }));
   };
 
   const change = (e) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   return (
     <div className="step-form">
       <h3 className="step-title">Step 1 — Shipment Details</h3>
 
-      {/* COMMON FIELDS SECTION */}
+      {/* ── Common Fields ── */}
+
+      {/* Row 1: Enquiry No + FF */}
       <div className="form-grid">
         <div className="field">
           <label>Enquiry No</label>
           <input className="input" value={form.enquiry_no} readOnly />
         </div>
+        {/* ✅ FF — added after Enquiry No */}
+        <div className="field">
+          <label>FF</label>
+          <input className="input" name="ff" value={form.ff} onChange={change} placeholder="Freight Forwarder" />
+        </div>
+      </div>
+
+      {/* Row 2: Supplier Name + Customer */}
+      <div className="form-grid">
         <div className="field">
           <label>Supplier Name</label>
           <input className="input" name="supplier_name" value={form.supplier_name} onChange={change} />
         </div>
-         <div className="field">
-    <label>Customer Name</label>
-    <input
-      className="input"name="customer"value={form.customer}onChange={change}placeholder="Enter Customer Name"
-    />
-  </div>
+        <div className="field">
+          <label>Customer</label>
+          <input className="input" name="customer" value={form.customer} onChange={change} />
+        </div>
+      </div>
+
+      {/* ✅ Row 3: Invoice No + Invoice Date — added after Customer */}
+      <div className="form-grid">
+        <div className="field">
+          <label>Invoice No</label>
+          <input className="input" name="invoice_no" value={form.invoice_no} onChange={change} />
+        </div>
+        <div className="field">
+          <label>Invoice Date</label>
+          <input className="input" type="date" name="invoice_date" value={form.invoice_date} onChange={change} />
+        </div>
       </div>
 
       <div className="form-grid">
@@ -145,19 +186,28 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* DYNAMIC PARTS SECTION */}
-      <div className="parts-container" style={{ marginTop: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #333', paddingBottom: '10px' }}>
+      {/* ── Part Details ── */}
+      <div className="parts-container" style={{ marginTop: "30px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #333", paddingBottom: "10px" }}>
           <h4>Part Details</h4>
           <button type="button" className="btn primary" onClick={addPart}>+ Add Part</button>
         </div>
 
         {form.parts.map((part, index) => (
-          <div key={index} style={{ border: '1px solid #eee', padding: '20px', margin: '15px 0', borderRadius: '8px', position: 'relative' }}>
-             {form.parts.length > 1 && (
-              <button onClick={() => removePart(index)} style={{ position: 'absolute', right: '10px', top: '10px', color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>✖ Remove</button>
+          <div
+            key={index}
+            style={{ border: "1px solid #eee", padding: "20px", margin: "15px 0", borderRadius: "8px", position: "relative" }}
+          >
+            {form.parts.length > 1 && (
+              <button
+                onClick={() => removePart(index)}
+                style={{ position: "absolute", right: "10px", top: "10px", color: "red", border: "none", background: "none", cursor: "pointer" }}
+              >
+                ✖ Remove
+              </button>
             )}
-            
+
+            {/* Row 1: Part No, Part Desc, Box Size, No. of Boxes */}
             <div className="form-grid">
               <div className="field">
                 <label>Part Number</label>
@@ -171,55 +221,103 @@ useEffect(() => {
                 <label>Box Size</label>
                 <input className="input" name="part_box_size" value={part.part_box_size} onChange={(e) => handlePartChange(index, e)} placeholder="e.g. 10x10x12" />
               </div>
+              {/* ✅ New field — No. of Boxes per part */}
+              <div className="field">
+                <label>No. of Boxes</label>
+                <input
+                  className="input"
+                  type="number"
+                  name="part_no_of_boxes"
+                  value={part.part_no_of_boxes}
+                  onChange={(e) => handlePartChange(index, e)}
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
             </div>
 
-            <div className="form-grid" style={{ marginTop: '10px' }}>
+            {/* Row 2: Qty, Net Wt/Unit, Total Net Wt (auto), Gross Wt (manual) */}
+            <div className="form-grid" style={{ marginTop: "10px" }}>
               <div className="field">
                 <label>Quantity</label>
-                <input className="input" type="number" name="part_qty" value={part.part_qty} onChange={(e) => handlePartChange(index, e)} />
+                <input
+                  className="input"
+                  type="number"
+                  name="part_qty"
+                  value={part.part_qty}
+                  onChange={(e) => handlePartChange(index, e)}
+                />
               </div>
               <div className="field">
                 <label>Net Wt / Unit (Kg)</label>
-                <input className="input" type="number" name="part_net_unit" value={part.part_net_unit} onChange={(e) => handlePartChange(index, e)} />
+                <input
+                  className="input"
+                  type="number"
+                  name="part_net_unit"
+                  value={part.part_net_unit}
+                  onChange={(e) => handlePartChange(index, e)}
+                />
               </div>
+
+              {/* ✅ Replaces Packing Wt — auto-calculated but editable */}
               <div className="field">
-                <label>Packing Wt (Kg)</label>
-                <input className="input" type="number" name="part_pkg_wt" value={part.part_pkg_wt} onChange={(e) => handlePartChange(index, e)} />
+                <label>
+                  Total Net Wt (Kg)
+                  <span style={{ fontSize: "11px", color: "#888", marginLeft: "6px" }}>
+                    (Qty × Net Wt/Unit)
+                  </span>
+                </label>
+                <input
+                  className="input"
+                  type="number"
+                  name="part_total_net_wt"
+                  value={part.part_total_net_wt}
+                  onChange={(e) => handlePartChange(index, e)}
+                  style={{ background: "#f0f7ff" }}   /* light blue = auto-calc hint */
+                />
               </div>
+
+              {/* ✅ Gross Wt stays fully manual */}
               <div className="field">
                 <label>Gross Wt (Kg)</label>
-                <input className="input" type="number" name="part_gross" value={part.part_gross} onChange={(e) => handlePartChange(index, e)} />
+                <input
+                  className="input"
+                  type="number"
+                  name="part_gross"
+                  value={part.part_gross}
+                  onChange={(e) => handlePartChange(index, e)}
+                />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* TOTALS SUMMARY SECTION */}
-      <div className="totals-section" style={{ background: '#f4f7f6', padding: '20px', borderRadius: '8px', border: '1px solid #ddd' }}>
-        <h4 style={{ marginBottom: '15px' }}>Whole Shipment Totals</h4>
+      {/* ── Whole Shipment Totals ── */}
+      <div
+        className="totals-section"
+        style={{ background: "#f4f7f6", padding: "20px", borderRadius: "8px", border: "1px solid #ddd", marginTop: "20px" }}
+      >
+        <h4 style={{ marginBottom: "15px" }}>Whole Shipment Totals</h4>
         <div className="form-grid">
           <div className="field">
-            <label>Total Net Weight</label>
-            <input className="input" value={form.total_net_wt} readOnly style={{ fontWeight: 'bold' }} />
+            <label>Total Net Weight (Kg)</label>
+            <input className="input" value={form.total_net_wt} readOnly style={{ fontWeight: "bold" }} />
           </div>
           <div className="field">
-            <label>Total Packing Weight</label>
-            <input className="input" value={form.total_pkg_wt} readOnly style={{ fontWeight: 'bold' }} />
+            <label>Total Gross Weight (Kg)</label>
+            <input className="input" value={form.total_gross_wt} readOnly style={{ fontWeight: "bold" }} />
           </div>
+          {/* ✅ Replaces "Total Parts Count" */}
           <div className="field">
-            <label>Total Gross Weight</label>
-            <input className="input" value={form.total_gross_wt} readOnly style={{ fontWeight: 'bold' }} />
-          </div>
-          <div className="field">
-            <label>Total Parts Count</label>
-            <input className="input" value={form.parts.length} readOnly />
+            <label>Total No. of Boxes</label>
+            <input className="input" value={form.total_no_of_boxes} readOnly style={{ fontWeight: "bold" }} />
           </div>
         </div>
       </div>
 
-      {/* COMMON SB INFO */}
-      <div className="form-grid" style={{ marginTop: '20px' }}>
+      {/* ── SB Info ── */}
+      <div className="form-grid" style={{ marginTop: "20px" }}>
         <div className="field">
           <label>SB No</label>
           <input className="input" name="sb_no" value={form.sb_no} onChange={change} />
@@ -230,7 +328,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <div className="actions" style={{ marginTop: '30px' }}>
+      <div className="actions" style={{ marginTop: "30px" }}>
         <button className="btn primary" onClick={onNext}>Save & Next</button>
       </div>
     </div>
