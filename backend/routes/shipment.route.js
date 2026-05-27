@@ -9,6 +9,7 @@ const {
   getEnquiryNumber,
   fetchAllShipments,
   getShipmentByBl,
+   getShipmentById,  
 } = require("../controllers/shipment.controller");
 const router = express.Router();
 
