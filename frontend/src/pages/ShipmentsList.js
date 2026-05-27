@@ -11,6 +11,7 @@ import { toast } from "react-toastify";
 export default function ShipmentsList() {
   const navigate = useNavigate();
   const location = useLocation();
+
   const isFirstLoad = useRef(true);
 
   // Pagination + search
@@ -96,6 +97,9 @@ export default function ShipmentsList() {
   function exportExcel() {
     const exportData = filteredRows.map(r => ({
       "Enquiry No": r.enquiry_no,
+      "FF": r.ff || "N/A",
+      "Invoice No": r.invoice_no || "N/A",
+      "Invoice Date": r.invoice_date ? new Date(r.invoice_date).toLocaleDateString() : "N/A",
       "Supplier Name": r.supplier_name,
       "Customer": r.customer,
       "Incoterm": r.incoterm || "N/A",
@@ -107,6 +111,7 @@ export default function ShipmentsList() {
       "Parts": r.parts?.map(p => p.part_no || p.part_number).join(", ") || (r.part_no || r.part_number || "N/A"),
       "Part Names": r.parts?.map(p => p.part_desc || p.part_name).join(", ") || (r.part_desc || r.part_name || "N/A"),
       // 🚀 FIXED: Pointing to correct backend database total keys
+       "Total Boxes": r.total_no_of_boxes || 0,
       "Total Parts Count": r.total_parts_count || 0,
       "Total Net Wt": r.total_net_weight || r.net_wt || 0,
       "Total Gross Wt": r.total_gross_weight || r.gross_wt || 0
@@ -123,10 +128,13 @@ export default function ShipmentsList() {
     const doc = new jsPDF("l", "pt", "a1"); 
     doc.autoTable({
       head: [
-        ["Enquiry No", "Supplier", "Incoterm", "Mode", "ETD", "BL No", "Container", "POL", "Parts", "Part Names", "Total Qty", "Net Wt", "Gross Wt"],
+        ["Enquiry No", "FF", "Invoice No", "Invoice Date", "Supplier", "Incoterm", "Mode", "ETD", "BL No", "Container", "POL", "Parts", "Part Names", "Total No of Boxes", "Net Wt", "Gross Wt"],
       ],
       body: filteredRows.map((r) => [
-        r.enquiry_no, 
+        r.enquiry_no,
+        r.ff || "N/A",
+        r.invoice_no || "N/A",
+        r.invoice_date ? new Date(r.invoice_date).toLocaleDateString() : "N/A",
         r.supplier_name, 
         r.incoterm || "N/A",
         r.mode, 
@@ -137,7 +145,7 @@ export default function ShipmentsList() {
         r.parts?.map(p => p.part_no || p.part_number).join(", ") || (r.part_no || r.part_number || "N/A"),
         r.parts?.map(p => p.part_desc || p.part_name).join(", ") || (r.part_desc || r.part_name || "N/A"),
         // 🚀 FIXED: Linked to exact db variables
-        r.total_parts_count || 0,
+        r.total_no_of_boxes || 0,
         r.total_net_weight || r.net_wt || 0, 
         r.total_gross_weight || r.gross_wt || 0,
       ]),
@@ -193,7 +201,9 @@ export default function ShipmentsList() {
                    <p><strong>Container No:</strong> {selectedLog.container_no || "N/A"}</p>
                    <p><strong>POL:</strong> {selectedLog.pol || "N/A"}</p>
                    {/* 🚀 FIXED modal field name */}
+                    <p><strong>Total Boxes:</strong>     {selectedLog.total_no_of_boxes  || 0}</p>
                    <p><strong>Total Net Wt:</strong> {selectedLog.total_net_weight || selectedLog.net_wt || 0} Kg</p>
+                    <p><strong>Total Gross Wt:</strong>  {selectedLog.total_gross_weight || selectedLog.gross_wt || 0} Kg</p>
                 </div>
               </div>
 
@@ -238,13 +248,15 @@ export default function ShipmentsList() {
           <thead>
             <tr>
               <th>Enquiry No</th>
+              <th>FF</th>
+              <th>Invoice No</th>
+              <th>Invoice Date</th>
               <th>Supplier</th>
               <th>Customer</th>
               <th>Incoterm</th>
               <th>Mode</th>
-              <th>Part No(s)</th>
-              <th>Part Name(s)</th>
-              <th>Total Qty</th>
+              <th colSpan={2}>Parts</th>
+              <th>Total Boxes </th>
               <th>Total Net Wt</th>
               <th>Total Gross Wt</th>
               <th>ETD</th>
@@ -268,39 +280,69 @@ export default function ShipmentsList() {
                 >
                   {r.enquiry_no}
                 </td>
+                <td>{r.ff || "N/A"}</td>
+                <td>{r.invoice_no || "N/A"}</td>
+                <td>{r.invoice_date ? new Date(r.invoice_date).toLocaleDateString() : "N/A"}</td>
                 <td>{r.supplier_name}</td>
                 <td>{r.customer}</td>
                 <td>{r.incoterm || "N/A"}</td>
                 <td><span className={`badge ${r.mode?.toLowerCase()}`}>{r.mode}</span></td>
                 
-                <td>
-                  {r.parts && r.parts.length > 0 
-                    ? (r.parts.length > 1 
-                        ? `${r.parts[0].part_no || r.parts[0].part_number} (+${r.parts.length - 1})` 
-                        : (r.parts[0].part_no || r.parts[0].part_number))
-                    : (r.part_no || r.part_number || "N/A")}
-                </td>
-
-                <td>
-                  {r.parts && r.parts.length > 0 
-                    ? (r.parts.length > 1 
-                        ? `${r.parts[0].part_desc || r.parts[0].part_name} (+${r.parts.length - 1})` 
-                        : (r.parts[0].part_desc || r.parts[0].part_name))
-                    : (r.part_desc || r.part_name || "N/A")}
+                <td colSpan={2} style={{ verticalAlign: "top", padding: "8px 6px" }}>
+                  {r.parts && r.parts.length > 0
+                    ? r.parts.map((p, i) => (
+                        <div key={i} style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "10px",
+                          padding: "5px 8px",
+                          marginBottom: i < r.parts.length - 1 ? "5px" : 0,
+                          background: i % 2 === 0 ? "#f8f9ff" : "#fff",
+                          border: "1px solid #e3e8f0",
+                          borderRadius: "6px",
+                          minWidth: "320px",
+                        }}>
+                          <span style={{
+                            minWidth: "18px", height: "18px", borderRadius: "50%",
+                            background: "#4a6cf7", color: "#fff",
+                            fontSize: "10px", fontWeight: "700",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0, marginTop: "2px"
+                          }}>{i + 1}</span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                            <span style={{ fontWeight: "600", fontSize: "13px", color: "#1a1a2e" }}>
+                              {p.part_no || p.part_number || "N/A"}
+                            </span>
+                            <span style={{ fontSize: "12px", color: "#555" }}>
+                              {p.part_desc || p.part_name || "N/A"}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    : (
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <span style={{ fontWeight: "600", fontSize: "13px" }}>{r.part_no || r.part_number || "N/A"}</span>
+                        <span style={{ fontSize: "12px", color: "#555" }}>{r.part_desc || r.part_name || "N/A"}</span>
+                      </div>
+                    )}
                 </td>
 
                 {/* 🚀 FIXED: Directly displays pre-calculated totals from backend now */}
-                <td>{r.total_parts_count !== undefined ? r.total_parts_count : (r.part_qty || 0)}</td>
-                <td>{r.total_net_weight !== undefined ? r.total_net_weight : (r.net_wt || 0)}</td>
-                <td>{r.total_gross_weight !== undefined ? r.total_gross_weight : (r.gross_wt || 0)}</td>
-
+                <td>{r.total_no_of_boxes  != null ? r.total_no_of_boxes  : 0}</td>
+                 <td>{r.total_net_weight   != null ? r.total_net_weight   : (r.net_wt   || 0)}</td>
+                <td>{r.total_gross_weight != null ? r.total_gross_weight : (r.gross_wt || 0)}</td>
+ 
+                {/* ✅ ETD now shows real data — populated by Fix 5 in controller */}
                 <td>{r.etd ? new Date(r.etd).toLocaleDateString() : "N/A"}</td>
+ 
                 <td>{r.bl_no || "N/A"}</td>
                 <td>{r.container_no || "N/A"}</td>
                 <td>{r.pol || "N/A"}</td>
                 
                 <td>
-                  <button className="edit-btn" disabled={r.status === "CANCELLED"} onClick={() => navigate(`/logistics/${r._id}`, { state: r })}>✏️</button>
+                  <button className="edit-btn" 
+                  disabled={r.status === "CANCELLED"} 
+                  onClick={() => navigate(`/logistics/${r._id}`, { state: r })}>✏️</button>
                 </td>
                 <td>
                   <select
